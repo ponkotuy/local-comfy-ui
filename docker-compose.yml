@@ -1,0 +1,45 @@
+services:
+  comfyui:
+    build:
+      context: .
+      args:
+        COMFYUI_VERSION: ${COMFYUI_VERSION:-master}
+    image: local-comfy-ui:latest
+    container_name: comfyui
+    restart: unless-stopped
+    # 生成物がホスト側で自分の所有になるよう uid/gid を合わせる
+    user: "${COMFYUI_UID:-1000}:${COMFYUI_GID:-1000}"
+    ports:
+      - "${COMFYUI_PORT:-8188}:8188"
+    volumes:
+      - ./data/models:/opt/comfyui/models
+      - ./data/input:/opt/comfyui/input
+      - ./data/output:/opt/comfyui/output
+      - ./data/user:/opt/comfyui/user
+      - ./data/custom_nodes:/opt/comfyui/custom_nodes
+      # HF キャッシュ (~/.cache) と pip install --user の追加パッケージ (~/.local)
+      - comfy-home:/home/comfyui
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      COMFYUI_ENABLE_MANAGER: ${COMFYUI_ENABLE_MANAGER:-1}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8188/system_stats')"
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+volumes:
+  comfy-home:

@@ -1,0 +1,7 @@
+data/models/*
+data/input/*
+data/output/*
+data/user/*
+data/custom_nodes/*
+!data/**/.gitkeep
+.env
