@@ -10,7 +10,7 @@
   },
   "9": {
     "inputs": {
-      "filename_prefix": "upscaling/%date:yyyy-MM-dd%",
+      "filename_prefix": "upscaling/_",
       "images": [
         "20",
         0
@@ -23,10 +23,10 @@
   },
   "20": {
     "inputs": {
-      "upscale_by": 2.0,
+      "upscale_by": 2,
       "seed": 835025658568307,
       "steps": 30,
-      "cfg": 4.0,
+      "cfg": 4,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 0.35,
@@ -36,17 +36,13 @@
       "mask_blur": 8,
       "tile_padding": 32,
       "seam_fix_mode": "None",
-      "seam_fix_denoise": 1.0,
+      "seam_fix_denoise": 1,
       "seam_fix_width": 64,
       "seam_fix_mask_blur": 8,
       "seam_fix_padding": 16,
       "force_uniform_tiles": true,
       "tiled_decode": false,
       "batch_size": 1,
-      "image": [
-        "50",
-        0
-      ],
       "model": [
         "4",
         0
@@ -92,7 +88,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Positive Prompt)"
+      "title": "POSITIVE"
     }
   },
   "48": {
@@ -105,13 +101,11 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Negative Prompt)"
+      "title": "NEGATIVE"
     }
   },
   "50": {
-    "inputs": {
-      "image": ""
-    },
+    "inputs": {},
     "class_type": "LoadImage",
     "_meta": {
       "title": "画像を読み込む"
