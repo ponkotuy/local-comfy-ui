@@ -5,3 +5,7 @@ data/user/*
 data/custom_nodes/*
 !data/**/.gitkeep
 .env
+
+# Python のローカル実行・テストで生成されるキャッシュ
+__pycache__/
+*.py[cod]

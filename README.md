@@ -101,3 +101,44 @@ site-packages に書き込めず依存の導入に失敗するためです。`pi
 Manager の起動に失敗すると ComfyUI ごと立ち上がらなくなります
 （`--enable-manager` の処理は ComfyUI 側で例外を捕捉していないため）。
 その場合は `.env` の `COMFYUI_ENABLE_MANAGER=0` で切り離して起動できます。
+
+## PNG のプロンプトを引き継いでアップスケールする
+
+ComfyUI が生成した PNG を指定し、画像内のメタデータからポジティブ・
+ネガティブプロンプトを取り出して `upscaling` ワークフローをキューへ投入できます。
+
+```sh
+python3 scripts/upscale.py data/output/ComfyUI_00070_.png
+```
+
+スクリプトは PNG の `prompt` メタデータを優先して解析し、ない場合は `workflow`
+メタデータを解析します。画像を ComfyUI の `input/local-comfy-ui-upscale/` に
+アップロードして `/prompt` へ投入した後、処理完了を待たずに `prompt_id` と
+予定保存先を表示します。結果は ComfyUI のキュー画面または
+`data/output/upscaling/` で確認してください。
+
+接続先はコマンドライン、環境変数、既定値の順に選ばれます。
+
+```sh
+# コマンドラインで指定
+python3 scripts/upscale.py --server http://192.168.1.10:8188 image.png
+
+# 環境変数で指定
+COMFYUI_URL=http://192.168.1.10:8188 python3 scripts/upscale.py image.png
+```
+
+`--server` と `COMFYUI_URL` がなければ、`COMFYUI_PORT`（既定 `8188`）を使った
+`http://127.0.0.1:<port>` に接続します。Python の追加パッケージは不要です。
+
+API 用ワークフローは `workflows/upscaling-api.json` にあります。UI 側の
+`data/user/default/workflows/upscaling.json` で倍率、denoise、モデルなどを変更した
+場合は、ComfyUI から API 形式で再エクスポートし、このファイルも更新してください。
+API テンプレートには `UltimateSDUpscale`、`LoadImage`、`SaveImage` が必要で、
+`UltimateSDUpscale` の positive / negative はそれぞれテキストエンコーダーへ
+直接接続されている必要があります。
+
+テストは標準の `unittest` で実行できます。
+
+```sh
+python3 -m unittest discover -s tests -v
+```
