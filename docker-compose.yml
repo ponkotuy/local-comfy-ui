@@ -9,8 +9,10 @@ services:
     restart: unless-stopped
     # 生成物がホスト側で自分の所有になるよう uid/gid を合わせる
     user: "${COMFYUI_UID:-1000}:${COMFYUI_GID:-1000}"
+    # 既定はループバックのみ。Manager の network_mode = personal_cloud により
+    # ネットワーク越しのカスタムノード導入が可能になるため、公開範囲を絞る
     ports:
-      - "${COMFYUI_PORT:-8188}:8188"
+      - "${COMFYUI_BIND:-127.0.0.1}:${COMFYUI_PORT:-8188}:8188"
     volumes:
       - ./data/models:/opt/comfyui/models
       - ./data/input:/opt/comfyui/input

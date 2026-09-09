@@ -47,6 +47,7 @@ Hugging Face のキャッシュ (`~/.cache`) と追加インストールした P
 `.env.example` を `.env` にコピーして編集します。
 
 - `COMFYUI_PORT` — ホスト側の公開ポート（既定 `8188`）
+- `COMFYUI_BIND` — ホスト側の bind アドレス（既定 `127.0.0.1`）。LAN の他マシンから使いたい場合のみ `0.0.0.0` などに広げます
 - `COMFYUI_VERSION` — 取得する ComfyUI のリビジョン（既定 `master`）
 - `COMFYUI_ENABLE_MANAGER` — ComfyUI-Manager を有効にするか（既定 `1`）
 - `COMFYUI_UID` / `COMFYUI_GID` — コンテナの実行ユーザー（既定 `1000`）。`id -u` / `id -g` が 1000 以外なら設定してください
@@ -93,10 +94,29 @@ Manager がインストールしたカスタムノードは `data/custom_nodes/`
 その Python 依存は `~/.local`（`comfy-home` ボリューム）に入るため、
 どちらもコンテナを作り直しても残ります。
 
-初回起動時に `data/user/__manager/config.ini` を `use_uv = False` で生成します。
-コンテナが非 root で動く都合上、Manager 既定の `uv` は `/opt/conda` の
-site-packages に書き込めず依存の導入に失敗するためです。`pip` は `--user` へ
-自動的にフォールバックするので、こちらを使わせています。
+初回起動時に `data/user/__manager/config.ini` を以下の内容で生成します。
+
+```ini
+[default]
+use_uv = False
+network_mode = personal_cloud
+```
+
+`use_uv = False` は、コンテナが非 root で動く都合上、Manager 既定の `uv` が
+`/opt/conda` の site-packages に書き込めず依存の導入に失敗するためです。
+`pip` は `--user` へ自動的にフォールバックするので、こちらを使わせています。
+
+`network_mode = personal_cloud` は、カスタムノードの導入が Manager の
+security policy で拒否されるのを避けるためです。Manager は listen アドレスが
+loopback かどうかでローカル利用を判定しますが、コンテナは外から繋ぐため
+`--listen 0.0.0.0` が必須で、この判定に入れません。既定の `network_mode = public`
+のままだとノードの導入が一律で失敗します（UI 上は分かりにくく、
+`data/user/comfyui_8188.log` に `security_level must be ...` のエラーが出ます）。
+
+代わりに公開範囲は Docker 側で絞っており、`COMFYUI_BIND` の既定値
+`127.0.0.1` によりホスト自身からしか繋がりません。LAN に公開する場合は
+「そのネットワークから誰でもカスタムノードを入れられる」状態になる点に
+注意してください。
 
 Manager の起動に失敗すると ComfyUI ごと立ち上がらなくなります
 （`--enable-manager` の処理は ComfyUI 側で例外を捕捉していないため）。
