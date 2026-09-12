@@ -1,0 +1,15 @@
+[project]
+name = "danbooru-tag-composer"
+description = "Edit Danbooru tags as a nested, drag-and-droppable tree and feed the result to CLIP Text Encode."
+version = "0.1.0"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/ponkotuy/local-comfy-ui"
+
+[tool.comfy]
+PublisherId = "ponkotuy"
+DisplayName = "Danbooru Tag Composer"
+Icon = ""

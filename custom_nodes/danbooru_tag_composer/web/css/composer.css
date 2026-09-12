@@ -1,0 +1,352 @@
+/* Danbooru Tag Composer
+ *
+ * 色は ComfyUI のテーマ変数に寄せておき、ライト/ダークのどちらでも読めるようにする。
+ * 変数が無い環境でもフォールバックだけで成立する値を第 2 引数に置いてある。 */
+
+.dtc-root {
+    --dtc-fg: var(--input-text, #ddd);
+    --dtc-dim: color-mix(in srgb, var(--input-text, #ddd) 55%, transparent);
+    --dtc-bg: var(--comfy-menu-bg, #353535);
+    --dtc-panel-bg: var(--comfy-input-bg, #222);
+    --dtc-border: var(--border-color, #4e4e4e);
+    --dtc-accent: var(--p-primary-color, #58a6ff);
+
+    height: 100%;
+    overflow: hidden;
+    color: var(--dtc-fg);
+    font-size: 12px;
+}
+
+.dtc-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* --- 編集対象 --- */
+
+.dtc-target {
+    flex: none;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: var(--dtc-panel-bg);
+    color: var(--dtc-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dtc-target-empty { font-style: italic; }
+
+.dtc-target-warn {
+    background: color-mix(in srgb, var(--dtc-accent) 35%, var(--dtc-panel-bg));
+    color: var(--dtc-fg);
+}
+
+/* --- 検索 --- */
+
+.dtc-search { flex: none; }
+
+.dtc-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 8px;
+    border: 1px solid var(--dtc-border);
+    border-radius: 4px;
+    background: var(--dtc-panel-bg);
+    color: var(--dtc-fg);
+    font-size: 12px;
+}
+
+.dtc-suggest {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-height: 120px;
+    margin-top: 4px;
+    overflow-y: auto;
+}
+
+.dtc-chip {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    max-width: 100%;
+    padding: 2px 7px;
+    border: 1px solid var(--dtc-border);
+    border-radius: 10px;
+    background: var(--dtc-panel-bg);
+    cursor: grab;
+    user-select: none;
+}
+
+.dtc-chip:hover { border-color: var(--dtc-accent); }
+.dtc-chip-used { opacity: 0.45; }
+.dtc-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dtc-chip-sub { color: var(--dtc-dim); font-size: 11px; }
+.dtc-chip-preset { border-style: dashed; }
+
+/* Danbooru のタグカテゴリ。a1111 系の配色に合わせておくと見慣れた色になる */
+.dtc-cat-artist    .dtc-chip-name { color: #e86f6f; }
+.dtc-cat-copyright .dtc-chip-name { color: #d17ad1; }
+.dtc-cat-character .dtc-chip-name { color: #6fbf6f; }
+.dtc-cat-meta      .dtc-chip-name { color: #d2a25c; }
+
+/* --- エリア --- */
+
+.dtc-area {
+    display: flex;
+    flex-direction: column;
+    min-height: 60px;
+    border: 1px solid var(--dtc-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* 適用エリアを広く、控えを狭く。使う頻度がそのまま高さの比になる */
+.dtc-area-active { flex: 3 1 0; }
+.dtc-area-inactive { flex: 1 1 0; }
+.dtc-presets { flex: none; }
+
+.dtc-area-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    padding: 3px 6px;
+    background: var(--dtc-bg);
+    border-bottom: 1px solid var(--dtc-border);
+}
+
+.dtc-area-header h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.dtc-area-count {
+    flex: 1;
+    color: var(--dtc-dim);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dtc-btn {
+    flex: none;
+    padding: 1px 6px;
+    border: 1px solid var(--dtc-border);
+    border-radius: 3px;
+    background: var(--dtc-panel-bg);
+    color: var(--dtc-fg);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.dtc-btn:hover { border-color: var(--dtc-accent); }
+
+.dtc-area-body {
+    flex: 1;
+    overflow: auto;
+    padding: 2px;
+}
+
+/* --- ツリー --- */
+
+.dtc-list { min-height: 18px; }
+.dtc-children { margin-left: 12px; border-left: 1px dotted var(--dtc-border); }
+
+.dtc-empty {
+    padding: 4px 8px;
+    color: var(--dtc-dim);
+    font-size: 11px;
+    font-style: italic;
+}
+
+.dtc-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    cursor: grab;
+    user-select: none;
+}
+
+.dtc-row:hover { background: color-mix(in srgb, var(--dtc-accent) 14%, transparent); }
+.dtc-row.dtc-off { opacity: 0.42; }
+.dtc-row.dtc-dragging { opacity: 0.35; }
+.dtc-group > .dtc-name { font-weight: 600; }
+
+.dtc-grip { flex: none; color: var(--dtc-dim); cursor: grab; }
+
+.dtc-toggle,
+.dtc-twisty,
+.dtc-menu {
+    flex: none;
+    width: 16px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.dtc-menu { color: var(--dtc-dim); }
+.dtc-menu:hover { color: var(--dtc-fg); }
+
+.dtc-name {
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dtc-ja {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--dtc-dim);
+    cursor: text;
+}
+
+.dtc-ja-missing { opacity: 0.5; }
+
+/* 機械翻訳は border -> 国境 のような直訳の誤りが混ざる。鵜呑みにされないよう
+ * 確定した対訳と見た目を分け、末尾に印を出す (クリックで直せる) */
+.dtc-ja-machine { opacity: 0.62; font-style: italic; }
+.dtc-ja-machine::after { content: " ※"; font-style: normal; }
+
+.dtc-chip-machine .dtc-chip-sub { opacity: 0.62; font-style: italic; }
+.dtc-ja-missing::before { content: "対訳なし"; font-style: italic; }
+.dtc-ja:not(.dtc-ja-missing)::before { content: "— "; }
+
+.dtc-count { flex: none; color: var(--dtc-dim); font-size: 11px; }
+
+.dtc-weight {
+    flex: none;
+    min-width: 12px;
+    color: var(--dtc-accent);
+    font-variant-numeric: tabular-nums;
+    cursor: ns-resize;
+}
+
+/* --- ドロップ位置の目印 --- */
+
+.dtc-drop-before { box-shadow: inset 0 2px 0 0 var(--dtc-accent); }
+.dtc-drop-after { box-shadow: inset 0 -2px 0 0 var(--dtc-accent); }
+
+.dtc-drop-into {
+    outline: 1px solid var(--dtc-accent);
+    outline-offset: -1px;
+    background: color-mix(in srgb, var(--dtc-accent) 18%, transparent);
+}
+
+/* --- プレビュー --- */
+
+.dtc-preview {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    max-height: 120px;
+    border: 1px solid var(--dtc-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.dtc-preview-text {
+    flex: 1;
+    margin: 0;
+    padding: 5px 6px;
+    overflow: auto;
+    background: var(--dtc-panel-bg);
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.dtc-preview-empty { color: var(--dtc-dim); font-style: italic; }
+
+/* --- 行メニュー --- */
+
+.dtc-popup {
+    position: fixed;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    padding: 3px;
+    border: 1px solid var(--border-color, #4e4e4e);
+    border-radius: 4px;
+    background: var(--comfy-menu-bg, #353535);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 45%);
+    color: var(--input-text, #ddd);
+    font-size: 12px;
+}
+
+.dtc-popup-item {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 3px;
+    background: none;
+    color: inherit;
+    font-size: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.dtc-popup-item:hover { background: color-mix(in srgb, var(--p-primary-color, #58a6ff) 25%, transparent); }
+
+/* --- ノード上のサマリ --- */
+
+.dtc-node {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 4px;
+    color: var(--input-text, #ddd);
+    font-size: 11px;
+}
+
+.dtc-node-summary { color: color-mix(in srgb, var(--input-text, #ddd) 70%, transparent); }
+
+.dtc-node-preview {
+    flex: 1;
+    min-height: 34px;
+    max-height: 76px;
+    padding: 4px 5px;
+    border-radius: 3px;
+    overflow: auto;
+    background: var(--comfy-input-bg, #222);
+    font-family: ui-monospace, monospace;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.dtc-node-preview-empty { font-style: italic; opacity: 0.6; }
+
+.dtc-node-edit {
+    flex: none;
+    padding: 3px;
+    border: 1px solid var(--border-color, #4e4e4e);
+    border-radius: 3px;
+    background: var(--comfy-menu-bg, #353535);
+    color: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.dtc-node-edit:hover { border-color: var(--p-primary-color, #58a6ff); }

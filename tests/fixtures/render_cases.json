@@ -1,0 +1,173 @@
+{
+  "_comment": "tagtree.render の期待値。Python 側 (tests/test_tag_composer.py) と JS 側 (custom_nodes/danbooru_tag_composer/web/js/render.js) の両方がこのファイルを読み、規則が食い違っていないか確かめる。規則を変えるときはここも直すこと。",
+  "cases": [
+    {
+      "name": "空のツリーは空文字",
+      "tree": {"version": 1, "active": [], "inactive": []},
+      "expected": ""
+    },
+    {
+      "name": "適用エリアのタグだけが出る",
+      "tree": {
+        "active": [{"kind": "tag", "tag": "1girl"}, {"kind": "tag", "tag": "solo"}],
+        "inactive": [{"kind": "tag", "tag": "nsfw"}]
+      },
+      "expected": "1girl, solo"
+    },
+    {
+      "name": "on=false のタグは落ちる",
+      "tree": {"active": [
+        {"kind": "tag", "tag": "1girl"},
+        {"kind": "tag", "tag": "solo", "on": false},
+        {"kind": "tag", "tag": "smile"}
+      ]},
+      "expected": "1girl, smile"
+    },
+    {
+      "name": "グループの中身は平らに展開される",
+      "tree": {"active": [
+        {"kind": "group", "name": "キャラ", "children": [
+          {"kind": "tag", "tag": "1girl"},
+          {"kind": "tag", "tag": "solo"}
+        ]},
+        {"kind": "tag", "tag": "smile"}
+      ]},
+      "expected": "1girl, solo, smile"
+    },
+    {
+      "name": "on=false のグループは配下ごと落ちる",
+      "tree": {"active": [
+        {"kind": "group", "name": "衣装", "on": false, "children": [
+          {"kind": "tag", "tag": "dress"},
+          {"kind": "group", "name": "小物", "children": [{"kind": "tag", "tag": "hat"}]}
+        ]},
+        {"kind": "tag", "tag": "1girl"}
+      ]},
+      "expected": "1girl"
+    },
+    {
+      "name": "入れ子のグループを辿る",
+      "tree": {"active": [
+        {"kind": "group", "name": "a", "children": [
+          {"kind": "tag", "tag": "t1"},
+          {"kind": "group", "name": "b", "children": [
+            {"kind": "tag", "tag": "t2"},
+            {"kind": "group", "name": "c", "children": [{"kind": "tag", "tag": "t3"}]}
+          ]}
+        ]}
+      ]},
+      "expected": "t1, t2, t3"
+    },
+    {
+      "name": "入れ子グループの中の個別 off",
+      "tree": {"active": [
+        {"kind": "group", "name": "a", "children": [
+          {"kind": "tag", "tag": "t1"},
+          {"kind": "group", "name": "b", "on": false, "children": [{"kind": "tag", "tag": "t2"}]},
+          {"kind": "tag", "tag": "t3"}
+        ]}
+      ]},
+      "expected": "t1, t3"
+    },
+    {
+      "name": "重み 1.0 は括弧なし、それ以外は (tag:w)",
+      "tree": {"active": [
+        {"kind": "tag", "tag": "a", "w": 1.0},
+        {"kind": "tag", "tag": "b", "w": 1.2},
+        {"kind": "tag", "tag": "c", "w": 0.5},
+        {"kind": "tag", "tag": "d", "w": 1.25}
+      ]},
+      "expected": "a, (b:1.2), (c:0.5), (d:1.25)"
+    },
+    {
+      "name": "重みは小数第2位で丸め、末尾の0を落とす",
+      "tree": {"active": [
+        {"kind": "tag", "tag": "a", "w": 1.5},
+        {"kind": "tag", "tag": "b", "w": 1.456},
+        {"kind": "tag", "tag": "c", "w": 2}
+      ]},
+      "expected": "(a:1.5), (b:1.46), (c:2.0)"
+    },
+    {
+      "name": "重みは範囲外を丸める",
+      "tree": {"active": [
+        {"kind": "tag", "tag": "a", "w": -3},
+        {"kind": "tag", "tag": "b", "w": 99}
+      ]},
+      "expected": "(a:0.0), (b:10.0)"
+    },
+    {
+      "name": "タグ名の括弧はエスケープする",
+      "tree": {"active": [
+        {"kind": "tag", "tag": "saber_(fate)"},
+        {"kind": "tag", "tag": "artoria_pendragon_(all)", "w": 1.1}
+      ]},
+      "expected": "saber_\\(fate\\), (artoria_pendragon_\\(all\\):1.1)"
+    },
+    {
+      "name": "コロンを含むタグも重み記法と共存できる (本体は最後のコロンで切る)",
+      "tree": {"active": [{"kind": "tag", "tag": ":d", "w": 1.3}]},
+      "expected": "(:d:1.3)"
+    },
+    {
+      "name": "同じタグは最初の1つだけ残る",
+      "tree": {"active": [
+        {"kind": "tag", "tag": "1girl", "w": 1.2},
+        {"kind": "group", "name": "g", "children": [{"kind": "tag", "tag": "1girl", "w": 0.5}]},
+        {"kind": "tag", "tag": "solo"}
+      ]},
+      "expected": "(1girl:1.2), solo"
+    },
+    {
+      "name": "off のタグは重複判定に数えない",
+      "tree": {"active": [
+        {"kind": "tag", "tag": "1girl", "on": false},
+        {"kind": "tag", "tag": "1girl", "w": 1.2}
+      ]},
+      "expected": "(1girl:1.2)"
+    },
+    {
+      "name": "separator を変えられる",
+      "tree": {"active": [{"kind": "tag", "tag": "a"}, {"kind": "tag", "tag": "b"}]},
+      "options": {"separator": " | "},
+      "expected": "a | b"
+    },
+    {
+      "name": "underscore_to_space",
+      "tree": {"active": [{"kind": "tag", "tag": "long_hair"}, {"kind": "tag", "tag": "open_mouth"}]},
+      "options": {"underscore_to_space": true},
+      "expected": "long hair, open mouth"
+    },
+    {
+      "name": "underscore_to_space は変換後の名前で重複判定する",
+      "tree": {"active": [{"kind": "tag", "tag": "long_hair"}, {"kind": "tag", "tag": "long hair"}]},
+      "options": {"underscore_to_space": true},
+      "expected": "long hair"
+    },
+    {
+      "name": "空のグループは何も出さない",
+      "tree": {"active": [
+        {"kind": "group", "name": "からっぽ", "children": []},
+        {"kind": "tag", "tag": "a"}
+      ]},
+      "expected": "a"
+    },
+    {
+      "name": "タグ名が空のノードは捨てる",
+      "tree": {"active": [
+        {"kind": "tag", "tag": "  "},
+        {"kind": "tag", "tag": " a "},
+        {"kind": "tag"}
+      ]},
+      "expected": "a"
+    },
+    {
+      "name": "非適用エリアのグループは無視される",
+      "tree": {
+        "active": [{"kind": "tag", "tag": "a"}],
+        "inactive": [{"kind": "group", "name": "g", "children": [{"kind": "tag", "tag": "b"}]}]
+      },
+      "expected": "a"
+    }
+  ]
+}

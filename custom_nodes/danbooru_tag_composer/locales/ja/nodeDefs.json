@@ -1,0 +1,26 @@
+{
+  "DanbooruTagComposer": {
+    "display_name": "Danbooru タグコンポーザー",
+    "description": "Danbooru タグをグループ化して編集し、適用エリアにある有効なタグだけをプロンプト文字列として出力します。編集はサイドバーの Tag Composer タブで行います。",
+    "inputs": {
+      "tree": {
+        "name": "タグ",
+        "tooltip": "タグツリーの JSON。通常はサイドバーの Tag Composer タブから編集します。"
+      },
+      "separator": {
+        "name": "区切り文字",
+        "tooltip": "タグとタグの間に入れる文字列。"
+      },
+      "underscore_to_space": {
+        "name": "アンダースコアを空白に",
+        "tooltip": "long_hair を long hair のように書き出します。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "プロンプト",
+        "tooltip": "組み立てたプロンプト文字列。CLIP Text Encode の text 入力へ繋いでください。"
+      }
+    }
+  }
+}
