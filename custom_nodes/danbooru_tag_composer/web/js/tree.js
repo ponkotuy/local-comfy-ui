@@ -47,31 +47,18 @@ function renderItem(ctx, node, area) {
     return item;
 }
 
-function commonRow(ctx, node, className) {
+function commonRow(node, className) {
     const row = el("div", `dtc-row ${className}`);
+    // 出力に入れるかどうかは適用エリアと非適用エリアのどちらに置くかで決める。
+    // 行ごとのトグルは非適用エリアと役割が重なるので持たない。ただし古いツリーには
+    // "on": false が残っていることがあるので、表示だけは分けておく
     if (!node.on) row.classList.add("dtc-off");
-
-    const grip = el("span", "dtc-grip", "⠿");
-    grip.title = "ドラッグで移動";
-    row.appendChild(grip);
-
-    const toggle = el("button", "dtc-toggle");
-    toggle.type = "button";
-    toggle.textContent = node.on ? "◉" : "◯";
-    toggle.title = node.on ? "適用中。クリックで外す" : "外してある。クリックで戻す";
-    toggle.setAttribute("aria-pressed", String(node.on));
-    toggle.addEventListener("click", () => {
-        node.on = !node.on;
-        ctx.onCommit();
-    });
-    row.appendChild(toggle);
-
     makeDraggable(row, () => ({ kind: "move", id: node.id }));
     return row;
 }
 
 function tagRow(ctx, node) {
-    const row = commonRow(ctx, node, "dtc-tag");
+    const row = commonRow(node, "dtc-tag");
 
     const name = el("span", "dtc-name", node.tag);
     name.title = node.tag;
@@ -103,7 +90,7 @@ function tagRow(ctx, node) {
 }
 
 function groupRow(ctx, node, area) {
-    const row = commonRow(ctx, node, "dtc-group");
+    const row = commonRow(node, "dtc-group");
 
     const twisty = el("button", "dtc-twisty", node.open ? "▾" : "▸");
     twisty.type = "button";
@@ -113,7 +100,7 @@ function groupRow(ctx, node, area) {
         // 開閉は見た目だけの話なので、ワークフローへ書き戻して undo 履歴を汚さない
         ctx.onChange();
     });
-    row.insertBefore(twisty, row.children[1]);
+    row.appendChild(twisty);
 
     const name = el("span", "dtc-name dtc-group-name", node.name || "(名前なし)");
     if (!node.name) name.classList.add("dtc-ja-missing");
