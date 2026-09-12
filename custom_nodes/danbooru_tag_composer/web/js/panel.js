@@ -534,15 +534,13 @@ class ComposerPanel {
         this.refresh();
     }
 
-    async savePreset(group) {
-        const name = await ask("プリセット名", group.name || "");
-        if (!name) return;
-        this.presets[name.trim()] = model.clone(group);
-        try {
-            await api.savePresets(this.presets);
-        } catch (error) {
+    // 名前はグループ名をそのまま使う。付け直したいときはグループ名を変えて保存し直す
+    savePreset(group) {
+        const name = group.name.trim() || "プリセット";
+        this.presets[name] = model.clone(group);
+        api.savePresets(this.presets).catch((error) => {
             console.warn("[Tag Composer] failed to save presets", error);
-        }
+        });
         this.renderPresets();
     }
 
