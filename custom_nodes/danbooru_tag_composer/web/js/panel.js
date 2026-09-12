@@ -113,7 +113,8 @@ class ComposerPanel {
             panel.appendChild(section);
 
             this.areaBoxes[area] = { body, counter };
-            installDropZone(body, (payload, target) => this.handleDrop(payload, target));
+            // ヘッダーも含めたエリアの枠ごと落とし先にする
+            installDropZone(section, (payload, target) => this.handleDrop(payload, target));
         }
 
         panel.appendChild(this.buildPresets());

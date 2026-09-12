@@ -151,10 +151,16 @@
 .dtc-btn:hover { border-color: var(--dtc-accent); }
 
 .dtc-area-body {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     overflow: auto;
     padding: 2px;
 }
+
+/* エリアの余白ごと落とし先にする。リストが中身の高さしか無いと、タグが数個しか
+ * 無いときに下の広い空白へ落としても当たり判定を外れ、上の方にしか落とせない */
+.dtc-area-body > .dtc-list { flex: 1 0 auto; }
 
 /* --- ツリー --- */
 

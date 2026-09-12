@@ -73,7 +73,7 @@ function indexOfItem(item) {
  * 行の上半分なら手前、下半分なら後ろ。グループ行は真ん中を広く取り、そこへ落とすと
  * グループの中 (先頭) に入る。行の上でなければ、その入れ物の末尾。
  */
-export function resolveTarget(event) {
+export function resolveTarget(event, root = null) {
     const row = event.target.closest?.(".dtc-row");
     const item = row?.closest(".dtc-item");
 
@@ -99,6 +99,16 @@ export function resolveTarget(event) {
         return listTarget(list, list.querySelectorAll(":scope > .dtc-item").length);
     }
 
+    // 行にもリストにも当たらない場所 (エリアのヘッダーや、リストの下の余白) に落ちた
+    // とき。エリアの枠の中ならどこで手を離しても受けたいので、そのエリアの一番外の
+    // リストの末尾に入れる。タグが数個しか無いと枠の大半がこの「どこでもない場所」に
+    // なるため、当たらなければ無視、では落とせる範囲が狭すぎる
+    const outer = root?.querySelector(".dtc-list");
+    if (outer) {
+        mark(outer, "dtc-drop-into");
+        return listTarget(outer, outer.querySelectorAll(":scope > .dtc-item").length);
+    }
+
     clearIndicator();
     return null;
 }
@@ -114,7 +124,7 @@ export function installDropZone(root, onDrop) {
         // preventDefault しないとブラウザがドロップを受け付けない
         event.preventDefault();
         event.dataTransfer.dropEffect = payload.kind === "move" ? "move" : "copy";
-        resolveTarget(event);
+        resolveTarget(event, root);
     });
 
     root.addEventListener("dragleave", (event) => {
@@ -125,7 +135,7 @@ export function installDropZone(root, onDrop) {
     root.addEventListener("drop", (event) => {
         if (!payload) return;
         event.preventDefault();
-        const target = resolveTarget(event);
+        const target = resolveTarget(event, root);
         const data = payload;
         endDrag();
         if (target) onDrop(data, target);
