@@ -19,6 +19,9 @@ services:
       - ./data/output:/opt/comfyui/output
       - ./data/user:/opt/comfyui/user
       - ./data/custom_nodes:/opt/comfyui/custom_nodes
+      # リポジトリで管理している自作のカスタムノード。data/custom_nodes は
+      # ComfyUI-Manager の管理領域で .gitignore してあるため、こちらは別に重ねる
+      - ./custom_nodes/danbooru_tag_composer:/opt/comfyui/custom_nodes/danbooru_tag_composer
       # HF キャッシュ (~/.cache) と pip install --user の追加パッケージ (~/.local)
       - comfy-home:/home/comfyui
     environment:

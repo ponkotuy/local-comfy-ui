@@ -1,0 +1,26 @@
+{
+  "DanbooruTagComposer": {
+    "display_name": "Danbooru Tag Composer",
+    "description": "Group Danbooru tags into a nested tree and output only the enabled tags in the active area. Edit the tree from the Tag Composer sidebar tab.",
+    "inputs": {
+      "tree": {
+        "name": "tags",
+        "tooltip": "Tag tree as JSON. Normally edited from the Tag Composer sidebar tab."
+      },
+      "separator": {
+        "name": "separator",
+        "tooltip": "Text placed between tags."
+      },
+      "underscore_to_space": {
+        "name": "underscore to space",
+        "tooltip": "Emit long_hair as long hair."
+      }
+    },
+    "outputs": {
+      "0": {
+        "name": "prompt",
+        "tooltip": "The assembled prompt string. Connect it to the text input of CLIP Text Encode."
+      }
+    }
+  }
+}
