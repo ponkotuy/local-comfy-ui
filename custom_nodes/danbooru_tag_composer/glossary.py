@@ -39,6 +39,11 @@ _KATAKANA_TO_HIRAGANA = {c: c - 0x60 for c in range(0x30A1, 0x30F7)}
 
 _JAPANESE_RE = re.compile(r"[ぁ-ゟ゠-ヿ一-鿿]")
 
+# 候補のうち部分一致のために空けておく割合。前方一致だけで埋めてしまうと、
+# hair のように hair_* が何十件もある語で long_hair が候補に出ず、
+# 使う側からは部分一致で引けていないのと変わらなくなる
+PARTIAL_SHARE = 1 / 3
+
 
 def fold(text: str) -> str:
     """検索用に表記ゆれを潰す。小文字化・アンダースコアと空白の同一視・片仮名の平仮名化。"""
@@ -91,6 +96,9 @@ class Glossary:
     def suggest(self, query: str, limit: int = 30) -> list[dict[str, Any]]:
         """前方一致を先に、部分一致をその後に、それぞれ投稿数の多い順で返す。
 
+        前方一致が limit を埋めきるときも部分一致には PARTIAL_SHARE 分の枠を残す。
+        部分一致が枠に満たなければ、余りは前方一致で埋める。
+
         日本語で引かれたときはタグ名を見ても当たらないので読みだけを探す。
         逆に英字で引かれたときも読みを見る必要はない。
         """
@@ -99,6 +107,7 @@ class Glossary:
             return []
 
         search_readings = bool(_JAPANESE_RE.search(query))
+        partial_room = max(1, int(limit * PARTIAL_SHARE))
 
         prefix: list[str] = []
         partial: list[str] = []
@@ -107,14 +116,15 @@ class Glossary:
             if not hay:
                 continue
             if hay.startswith(needle):
-                prefix.append(tag)
-            elif needle in hay:
+                if len(prefix) < limit:
+                    prefix.append(tag)
+            elif needle in hay and len(partial) < partial_room:
                 partial.append(tag)
-            # 前方一致だけで足りている場合でも部分一致を探し続ける必要はない
-            if len(prefix) >= limit:
+            # どちらの枠も埋まったら、この先を見ても結果は変わらない
+            if len(prefix) >= limit and len(partial) >= partial_room:
                 break
 
-        results = (prefix + partial)[:limit]
+        results = prefix[: limit - len(partial)] + partial
         return [entry for entry in (self.lookup(tag) for tag in results) if entry]
 
 

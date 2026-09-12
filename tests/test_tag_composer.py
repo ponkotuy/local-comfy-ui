@@ -17,6 +17,7 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "render_cases.json"
 # rather than installing anything.
 sys.path.insert(0, str(NODE_ROOT))
 
+import glossary  # noqa: E402
 import tagtree  # noqa: E402
 
 
@@ -166,6 +167,52 @@ class CountTagsTest(unittest.TestCase):
             }
         )
         self.assertEqual(counts, {"active": 2, "active_total": 3, "inactive": 2})
+
+
+class SuggestTest(unittest.TestCase):
+    """Tag search: prefix matches first, but partial matches always get a share."""
+
+    @staticmethod
+    def _glossary(*rows):
+        """Build a glossary from (tag, count, readings) rows."""
+        return glossary.Glossary(
+            {tag: [0, count, glossary.SOURCE_NONE, list(readings)] for tag, count, readings in rows}
+        )
+
+    def _suggest(self, tags, query, limit):
+        return [entry["tag"] for entry in tags.suggest(query, limit)]
+
+    def test_prefix_matches_come_first(self):
+        tags = self._glossary(("long_hair", 5000, []), ("hair_ribbon", 100, []))
+        self.assertEqual(self._suggest(tags, "hair", 10), ["hair_ribbon", "long_hair"])
+
+    def test_partial_matches_keep_a_share_of_the_slots(self):
+        # Without a reserved share, ten hair_* tags would fill every slot and
+        # long_hair — the tag actually wanted — would never show up.
+        rows = [(f"hair_{i}", 1000 - i, []) for i in range(10)]
+        tags = self._glossary(*rows, ("long_hair", 5000, []), ("short_hair", 4000, []))
+        self.assertEqual(
+            self._suggest(tags, "hair", 6),
+            ["hair_0", "hair_1", "hair_2", "hair_3", "long_hair", "short_hair"],
+        )
+
+    def test_prefix_matches_take_the_slots_partial_matches_leave(self):
+        rows = [(f"hair_{i}", 1000 - i, []) for i in range(10)]
+        tags = self._glossary(*rows)
+        self.assertEqual(self._suggest(tags, "hair", 3), ["hair_0", "hair_1", "hair_2"])
+
+    def test_underscores_and_spaces_match_either_way(self):
+        tags = self._glossary(("long_hair", 5000, []))
+        self.assertEqual(self._suggest(tags, "long hair", 10), ["long_hair"])
+
+    def test_japanese_query_searches_readings_not_tag_names(self):
+        tags = self._glossary(("long_hair", 5000, ["ロングヘア", "ろんぐへあ"]))
+        # Matches mid-reading, and katakana in the entry is folded to hiragana
+        self.assertEqual(self._suggest(tags, "んぐへ", 10), ["long_hair"])
+
+    def test_blank_query_returns_nothing(self):
+        tags = self._glossary(("long_hair", 5000, []))
+        self.assertEqual(self._suggest(tags, "   ", 10), [])
 
 
 if __name__ == "__main__":
