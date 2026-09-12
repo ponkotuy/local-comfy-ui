@@ -5,11 +5,6 @@ import * as model from "./model.js";
 import { makeDraggable } from "./dnd.js";
 import { formatWeight } from "./render.js";
 
-// 重みの上下ドラッグの刻み。タグチップの上でのドラッグなので細かすぎると合わせにくい
-const WEIGHT_STEP = 0.05;
-// 1 刻み動かすのに必要なドラッグ量 (px)
-const WEIGHT_PIXELS_PER_STEP = 6;
-
 function el(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -100,10 +95,8 @@ function tagRow(ctx, node) {
     label.addEventListener("click", () => ctx.editTranslation(node));
     row.appendChild(label);
 
-    const weight = el("span", "dtc-weight", node.w === 1.0 ? "" : `×${formatWeight(node.w)}`);
-    weight.title = "上下にドラッグで重みを調整 / ダブルクリックで 1.0 に戻す";
-    installWeightDrag(ctx, node, weight, row);
-    row.appendChild(weight);
+    // 重みの付け外しは ⋯ メニューに寄せてある。ここは付いていることの表示だけ
+    if (node.w !== 1.0) row.appendChild(el("span", "dtc-weight", `×${formatWeight(node.w)}`));
 
     row.appendChild(menuButton(ctx, node));
     return row;
@@ -161,53 +154,6 @@ function menuButton(ctx, node) {
         ctx.openMenu(node, button);
     });
     return button;
-}
-
-/**
- * 重みの上下ドラッグ。
- *
- * ポインタを掴んでいる間は表示だけを更新し、離した時点で一度だけ確定させる。
- * 毎フレーム書き戻すと undo 履歴がドラッグの回数だけ積まれて使い物にならなくなる。
- */
-function installWeightDrag(ctx, node, label, row) {
-    label.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        // ドラッグ中は行そのものの D&D を止める。両方生きていると HTML5 の
-        // ドラッグが先に走って重みを合わせられない
-        row.draggable = false;
-        label.setPointerCapture(event.pointerId);
-
-        const startY = event.clientY;
-        const startWeight = node.w;
-
-        const onMove = (moveEvent) => {
-            const steps = Math.round((startY - moveEvent.clientY) / WEIGHT_PIXELS_PER_STEP);
-            const next = Math.max(0, Math.min(10, startWeight + steps * WEIGHT_STEP));
-            node.w = Math.round(next * 100) / 100;
-            label.textContent = node.w === 1.0 ? "" : `×${formatWeight(node.w)}`;
-            ctx.onPreview();
-        };
-
-        const onUp = () => {
-            label.removeEventListener("pointermove", onMove);
-            label.removeEventListener("pointerup", onUp);
-            label.removeEventListener("pointercancel", onUp);
-            row.draggable = true;
-            if (node.w !== startWeight) ctx.onCommit();
-        };
-
-        label.addEventListener("pointermove", onMove);
-        label.addEventListener("pointerup", onUp);
-        label.addEventListener("pointercancel", onUp);
-    });
-
-    label.addEventListener("dblclick", (event) => {
-        event.stopPropagation();
-        if (node.w === 1.0) return;
-        node.w = 1.0;
-        ctx.onCommit();
-    });
 }
 
 /** 候補やプリセットのチップ。掴んでエリアへ落とせる。 */

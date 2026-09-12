@@ -12,6 +12,9 @@ import { renderArea, makeChip } from "./tree.js";
 import { render as renderPrompt } from "./render.js";
 
 const AREA_LABELS = { active: "適用エリア", inactive: "非適用エリア" };
+// メニューから付け外しできる強調の重み。実際に使うのはこの 1 段だけなので、
+// 任意の値を入れる UI は置いていない
+const EMPHASIS_WEIGHT = 1.3;
 const SUGGEST_DEBOUNCE_MS = 120;
 const SUGGEST_LIMIT = 24;
 
@@ -248,7 +251,6 @@ class ComposerPanel {
                       ? "ここへタグをドラッグすると出力に入る"
                       : "外しておきたいタグをここへ",
             onChange: () => this.refresh(),
-            onPreview: () => this.updatePreview(),
             onCommit: () => this.commit(),
             openMenu: (node, anchor) => this.openMenu(node, anchor),
             renameGroup: (node) => this.renameGroup(node),
@@ -482,6 +484,13 @@ class ComposerPanel {
             model.move(this.tree, node.id, { area: other, parentId: null, index: Infinity });
             this.commit();
         });
+        if (node.kind !== "group") {
+            const emphasized = node.w === EMPHASIS_WEIGHT;
+            item(emphasized ? `重み ${EMPHASIS_WEIGHT} を外す` : `重み ${EMPHASIS_WEIGHT} を付ける`, () => {
+                node.w = emphasized ? 1.0 : EMPHASIS_WEIGHT;
+                this.commit();
+            });
+        }
         item("グループでくるむ", () => {
             model.wrapInGroup(this.tree, node.id, "新しいグループ");
             this.commit();

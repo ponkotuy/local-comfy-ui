@@ -237,7 +237,6 @@
     min-width: 12px;
     color: var(--dtc-accent);
     font-variant-numeric: tabular-nums;
-    cursor: ns-resize;
 }
 
 /* --- ドロップ位置の目印 --- */
