@@ -68,6 +68,59 @@ def api_prompt(positive: str = "positive", negative: str = "negative") -> dict:
     }
 
 
+def api_template(
+    positive_text: str = "",
+    negative_text: str = "",
+    prefix: str = "fixture/output",
+) -> dict:
+    """A minimal API-format workflow with the shape upscale.py requires.
+
+    prepare_prompt() locates nodes by class_type, so these tests deliberately
+    number the nodes unlike workflows/upscaling-api.json: what the project's own
+    template happens to contain is its business, not this test's. The bundled
+    template is exercised separately by ProjectTemplateTests.
+    """
+    return {
+        "ckpt": {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {"ckpt_name": "fixture.safetensors"},
+        },
+        "pos": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": positive_text, "clip": ["ckpt", 1]},
+        },
+        "neg": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": negative_text, "clip": ["ckpt", 1]},
+        },
+        "load": {"class_type": "LoadImage", "inputs": {}},
+        "upscale": {
+            "class_type": "UltimateSDUpscale",
+            "inputs": {
+                "image": ["load", 0],
+                "model": ["ckpt", 0],
+                "positive": ["pos", 0],
+                "negative": ["neg", 0],
+                "seed": 0,
+                "steps": 30,
+                "denoise": 0.35,
+            },
+        },
+        "save": {
+            "class_type": "SaveImage",
+            "inputs": {"filename_prefix": prefix, "images": ["upscale", 0]},
+        },
+    }
+
+
+def find_node(prompt: dict, class_type: str) -> dict:
+    """The first node of a class, the same way upscale.py finds them."""
+    for node in prompt.values():
+        if isinstance(node, dict) and node.get("class_type") == class_type:
+            return node
+    raise AssertionError(f"no {class_type} node in the prompt")
+
+
 class FakeResponse:
     def __init__(self, value: dict):
         self.body = json.dumps(value).encode("utf-8")
@@ -199,22 +252,94 @@ class PngMetadataTests(unittest.TestCase):
 
 
 class ApiTests(unittest.TestCase):
-    def setUp(self):
-        self.template = upscale.load_template(upscale.DEFAULT_TEMPLATE)
+    """What prepare_prompt() guarantees, independent of any particular template."""
 
-    def test_prepare_prompt_replaces_exactly_the_three_workflow_inputs(self):
-        with mock.patch.object(upscale.secrets, "randbelow", return_value=1234):
-            prompt, prefix = upscale.prepare_prompt(
-                self.template, "uploads/source.png", "new positive", "new negative"
+    def setUp(self):
+        self.template = api_template()
+
+    def prepare(self, template=None, seed=1234, **kwargs):
+        with mock.patch.object(upscale.secrets, "randbelow", return_value=seed):
+            return upscale.prepare_prompt(
+                template if template is not None else self.template,
+                kwargs.get("image", "uploads/source.png"),
+                kwargs.get("positive", "new positive"),
+                kwargs.get("negative", "new negative"),
             )
 
-        self.assertEqual(prompt["50"]["inputs"]["image"], "uploads/source.png")
-        self.assertEqual(prompt["47"]["inputs"]["text"], "new positive")
-        self.assertEqual(prompt["48"]["inputs"]["text"], "new negative")
-        self.assertEqual(prompt["20"]["inputs"]["seed"], 1234)
-        self.assertEqual(prefix, "upscaling/%date:yyyy-MM-dd%")
-        self.assertEqual(self.template["47"]["inputs"]["text"], "")
+    def test_fills_in_the_image_the_prompts_and_a_fresh_seed(self):
+        prompt, prefix = self.prepare()
 
+        self.assertEqual(find_node(prompt, "LoadImage")["inputs"]["image"], "uploads/source.png")
+        self.assertEqual(prompt["pos"]["inputs"]["text"], "new positive")
+        self.assertEqual(prompt["neg"]["inputs"]["text"], "new negative")
+        self.assertEqual(find_node(prompt, "UltimateSDUpscale")["inputs"]["seed"], 1234)
+        self.assertEqual(prefix, "fixture/output")
+
+    def test_returns_whatever_prefix_the_template_carries(self):
+        # The CLI reports where the result will land, so it must echo the
+        # template rather than assume a particular naming scheme.
+        _prompt, prefix = self.prepare(api_template(prefix="somewhere/else_%date:yyyy-MM-dd%"))
+        self.assertEqual(prefix, "somewhere/else_%date:yyyy-MM-dd%")
+
+    def test_changes_nothing_else(self):
+        prompt, _prefix = self.prepare()
+
+        expected = api_template()
+        expected["load"]["inputs"]["image"] = "uploads/source.png"
+        expected["pos"]["inputs"]["text"] = "new positive"
+        expected["neg"]["inputs"]["text"] = "new negative"
+        expected["upscale"]["inputs"]["seed"] = 1234
+        self.assertEqual(prompt, expected)
+
+    def test_leaves_the_caller_s_template_alone(self):
+        self.prepare()
+        self.assertEqual(self.template, api_template())
+
+    def test_follows_the_links_rather_than_the_node_order(self):
+        # positive/negative are resolved through UltimateSDUpscale's links, so
+        # swapping which encoder they point at must swap the texts too.
+        template = api_template()
+        template["upscale"]["inputs"]["positive"] = ["neg", 0]
+        template["upscale"]["inputs"]["negative"] = ["pos", 0]
+
+        prompt, _prefix = self.prepare(template)
+
+        self.assertEqual(prompt["neg"]["inputs"]["text"], "new positive")
+        self.assertEqual(prompt["pos"]["inputs"]["text"], "new negative")
+
+    def test_rejects_a_template_missing_a_required_node(self):
+        for class_type in ("UltimateSDUpscale", "LoadImage", "SaveImage"):
+            with self.subTest(class_type):
+                template = api_template()
+                node_id = next(k for k, v in template.items() if v["class_type"] == class_type)
+                del template[node_id]
+
+                with self.assertRaisesRegex(upscale.UpscaleError, "must contain"):
+                    self.prepare(template)
+
+    def test_rejects_an_unlinked_prompt_input(self):
+        template = api_template()
+        template["upscale"]["inputs"]["positive"] = "just text"
+
+        with self.assertRaisesRegex(upscale.UpscaleError, "positive is not linked"):
+            self.prepare(template)
+
+    def test_rejects_a_prompt_input_that_does_not_reach_a_text_encoder(self):
+        template = api_template()
+        template["upscale"]["inputs"]["positive"] = ["ckpt", 0]
+
+        with self.assertRaisesRegex(upscale.UpscaleError, "CLIPTextEncode"):
+            self.prepare(template)
+
+    def test_rejects_a_save_node_without_a_prefix(self):
+        template = api_template()
+        del template["save"]["inputs"]["filename_prefix"]
+
+        with self.assertRaisesRegex(upscale.UpscaleError, "filename_prefix"):
+            self.prepare(template)
+
+
+class HttpTests(unittest.TestCase):
     @mock.patch("upscale.urllib.request.urlopen")
     def test_upload_and_queue_http_payloads(self, urlopen):
         urlopen.side_effect = [
@@ -233,7 +358,7 @@ class ApiTests(unittest.TestCase):
             uploaded = upscale.upload_image("http://localhost:8188", Path(image.name))
 
         prompt, _prefix = upscale.prepare_prompt(
-            self.template, uploaded, "positive", "negative"
+            api_template(), uploaded, "positive", "negative"
         )
         prompt_id = upscale.queue_prompt("http://localhost:8188", prompt)
 
@@ -246,11 +371,42 @@ class ApiTests(unittest.TestCase):
         queue_request = urlopen.call_args_list[1].args[0]
         queued = json.loads(queue_request.data)
         self.assertEqual(
-            queued["prompt"]["50"]["inputs"]["image"],
+            find_node(queued["prompt"], "LoadImage")["inputs"]["image"],
             "local-comfy-ui-upscale/upscale-test.png",
         )
-        self.assertEqual(queued["prompt"]["47"]["inputs"]["text"], "positive")
-        self.assertEqual(queued["prompt"]["48"]["inputs"]["text"], "negative")
+        self.assertEqual(queued["prompt"]["pos"]["inputs"]["text"], "positive")
+        self.assertEqual(queued["prompt"]["neg"]["inputs"]["text"], "negative")
+
+
+class ProjectTemplateTests(unittest.TestCase):
+    """The bundled template must keep satisfying the contract above.
+
+    Only the contract is checked. Model names, tile sizes, denoise and the
+    output prefix are settings the workflow is free to change, so asserting
+    them here would just mean editing this file every time the workflow is
+    re-exported from ComfyUI.
+    """
+
+    def test_bundled_template_still_works_with_the_cli(self):
+        template = upscale.load_template(upscale.DEFAULT_TEMPLATE)
+
+        with mock.patch.object(upscale.secrets, "randbelow", return_value=7):
+            prompt, prefix = upscale.prepare_prompt(
+                template, "uploads/source.png", "positive here", "negative here"
+            )
+
+        self.assertEqual(find_node(prompt, "LoadImage")["inputs"]["image"], "uploads/source.png")
+        self.assertEqual(find_node(prompt, "UltimateSDUpscale")["inputs"]["seed"], 7)
+        self.assertTrue(prefix, "the template must name an output prefix")
+
+        # Follow the links the same way the CLI does, without caring which node
+        # ids the workflow happens to use.
+        upscale_inputs = find_node(prompt, "UltimateSDUpscale")["inputs"]
+        texts = {
+            side: prompt[str(upscale_inputs[side][0])]["inputs"]["text"]
+            for side in ("positive", "negative")
+        }
+        self.assertEqual(texts, {"positive": "positive here", "negative": "negative here"})
 
 
 if __name__ == "__main__":
