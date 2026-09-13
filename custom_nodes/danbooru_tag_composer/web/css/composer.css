@@ -186,7 +186,8 @@
 
 .dtc-row:hover { background: color-mix(in srgb, var(--dtc-accent) 14%, transparent); }
 .dtc-row.dtc-off { opacity: 0.42; }
-.dtc-row.dtc-dragging { opacity: 0.35; }
+.dtc-row.dtc-dragging,
+.dtc-chip.dtc-dragging { opacity: 0.35; }
 /* グループ行にはタグ行の対訳にあたる伸びる要素が無い。名前を伸ばしておかないと
  * ⋯ が名前の直後に来てしまい、タグ行の ⋯ と縦に揃わない */
 .dtc-group > .dtc-name {

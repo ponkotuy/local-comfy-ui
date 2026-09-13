@@ -19,13 +19,21 @@ const GROUP_EDGE_RATIO = 0.3;
 const DROP_CLASSES = ["dtc-drop-before", "dtc-drop-after", "dtc-drop-into"];
 
 // dataTransfer は dragover 中に読めないブラウザがあるため、実体はここに置く。
-// dataTransfer 側には Firefox でドラッグを開始させるためのダミーを入れておく
+// dataTransfer 側には Firefox でドラッグを開始させるためのテキストを入れておく
 let payload = null;
+
+/** その持ち物をどう扱うか。行の移動は元が消えるので move、候補やプリセットは copy。 */
+function effectOf(data) {
+    return data.kind === "move" ? "move" : "copy";
+}
 
 export function beginDrag(event, data) {
     payload = data;
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", data.kind === "move" ? data.id : "");
+    // effectAllowed と dropEffect が食い違うとブラウザは drop 自体を捨てる (drop
+    // イベントが飛ばない)。候補を move 扱いで始めて copy で受けようとしていたために、
+    // 候補チップだけエリアへ落とせなくなっていた
+    event.dataTransfer.effectAllowed = effectOf(data);
+    event.dataTransfer.setData("text/plain", data.text ?? "");
 }
 
 export function endDrag() {
@@ -123,7 +131,7 @@ export function installDropZone(root, onDrop) {
         if (!payload) return;
         // preventDefault しないとブラウザがドロップを受け付けない
         event.preventDefault();
-        event.dataTransfer.dropEffect = payload.kind === "move" ? "move" : "copy";
+        event.dataTransfer.dropEffect = effectOf(payload);
         resolveTarget(event, root);
     });
 

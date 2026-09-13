@@ -53,7 +53,13 @@ function commonRow(node, className) {
     // 行ごとのトグルは非適用エリアと役割が重なるので持たない。ただし古いツリーには
     // "on": false が残っていることがあるので、表示だけは分けておく
     if (!node.on) row.classList.add("dtc-off");
-    makeDraggable(row, () => ({ kind: "move", id: node.id }));
+    // text は dataTransfer に入れる表示用の文字列。外のテキスト欄へ落としたときに
+    // 内部 id ではなくタグ名が貼られる
+    makeDraggable(row, () => ({
+        kind: "move",
+        id: node.id,
+        text: node.kind === "tag" ? node.tag : node.name,
+    }));
     return row;
 }
 
@@ -148,8 +154,9 @@ export function makeChip(label, sub, buildNode, onActivate) {
     const chip = el("div", "dtc-chip");
     chip.appendChild(el("span", "dtc-chip-name", label));
     if (sub) chip.appendChild(el("span", "dtc-chip-sub", sub));
-    chip.title = "ドラッグしてエリアへ / クリックで適用エリアの末尾に追加";
-    makeDraggable(chip, () => ({ kind: "new", node: buildNode() }));
+    chip.title = "ドラッグしてエリアの好きな位置へ / クリックで適用エリアの末尾に追加";
+    // 掴むたびに新しいノードを作る。同じ候補を二度落としても id が衝突しない
+    makeDraggable(chip, () => ({ kind: "new", node: buildNode(), text: label }));
     chip.addEventListener("click", () => onActivate(buildNode()));
     return chip;
 }

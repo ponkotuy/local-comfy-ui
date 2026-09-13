@@ -239,6 +239,7 @@ class ComposerPanel {
         this.updateCounts();
         this.updatePreview();
         this.renderPresets();
+        this.markUsedSuggestions();
     }
 
     context() {
@@ -325,7 +326,6 @@ class ComposerPanel {
         // 打鍵が速いと応答が前後するので、最後に投げたものだけを描く
         if (seq !== this.suggestSeq) return;
 
-        const used = model.tagNamesIn(this.tree, "active");
         this.suggestBox.replaceChildren();
         for (const item of items) {
             const entry = readTranslation(item);
@@ -337,8 +337,8 @@ class ComposerPanel {
                 () => model.makeTag(item.tag),
                 (node) => this.appendNode("active", node),
             );
+            chip.dataset.tag = item.tag;
             chip.classList.add(`dtc-cat-${item.categoryName}`);
-            if (used.has(item.tag)) chip.classList.add("dtc-chip-used");
             if (!override && entry.machine) {
                 chip.classList.add("dtc-chip-machine");
             }
@@ -346,11 +346,25 @@ class ComposerPanel {
         }
         if (!items.length && query.trim()) {
             const free = model.makeTag(query.trim());
-            this.suggestBox.appendChild(
-                makeChip(query.trim(), "辞書にないタグ", () => model.clone(free), (node) =>
-                    this.appendNode("active", node),
-                ),
+            const chip = makeChip(query.trim(), "辞書にないタグ", () => model.clone(free), (node) =>
+                this.appendNode("active", node),
             );
+            chip.dataset.tag = free.tag;
+            this.suggestBox.appendChild(chip);
+        }
+        this.markUsedSuggestions();
+    }
+
+    /**
+     * 候補チップに「もう適用エリアに入っている」印を付け直す。
+     *
+     * 候補を引き直さずに済ませたいので、チップは消さずにクラスだけ塗り替える。
+     * ドラッグで落としたときも、クリックで足したときも、これで印が追い付く。
+     */
+    markUsedSuggestions() {
+        const used = model.tagNamesIn(this.tree, "active");
+        for (const chip of this.suggestBox.querySelectorAll(".dtc-chip[data-tag]")) {
+            chip.classList.toggle("dtc-chip-used", used.has(chip.dataset.tag));
         }
     }
 
@@ -358,7 +372,6 @@ class ComposerPanel {
         if (!this.requireNode()) return;
         model.insert(this.tree, node, { area, parentId: null, index: Infinity });
         this.commit();
-        this.runSuggest();
     }
 
     addGroup(area) {

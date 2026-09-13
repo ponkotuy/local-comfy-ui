@@ -64,6 +64,9 @@ class JavaScriptTest(unittest.TestCase):
     def test_tree_operations(self):
         self.run_js("model.test.mjs")
 
+    def test_drag_and_drop_contract(self):
+        self.run_js("dnd.test.mjs")
+
 
 class RenderInputTest(unittest.TestCase):
     def test_accepts_json_string(self):
