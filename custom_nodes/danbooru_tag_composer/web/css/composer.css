@@ -10,6 +10,7 @@
     --dtc-panel-bg: var(--comfy-input-bg, #222);
     --dtc-border: var(--border-color, #4e4e4e);
     --dtc-accent: var(--p-primary-color, #58a6ff);
+    --dtc-danger: var(--p-red-400, #e86f6f);
 
     height: 100%;
     overflow: hidden;
@@ -152,6 +153,12 @@
 }
 
 .dtc-btn:hover { border-color: var(--dtc-accent); }
+
+/* 押すと中身が消えるボタン。隣の ＋グループ と同じ色で並べたくない */
+.dtc-btn-danger:hover {
+    border-color: var(--dtc-danger);
+    color: var(--dtc-danger);
+}
 
 .dtc-area-body {
     display: flex;

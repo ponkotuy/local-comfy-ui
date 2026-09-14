@@ -10,7 +10,7 @@ import * as nodeio from "./nodeio.js";
 import * as save from "./save.js";
 import { installDropZone } from "./dnd.js";
 import { renderArea, makeChip } from "./tree.js";
-import { render as renderPrompt } from "./render.js";
+import { render as renderPrompt, countTags } from "./render.js";
 
 const AREA_LABELS = { active: "適用エリア", inactive: "非適用エリア" };
 // メニューから付け外しできる強調の重み。実際に使うのはこの 1 段だけなので、
@@ -147,6 +147,12 @@ class ComposerPanel {
             addGroup.title = "このエリアの末尾に空のグループを作る";
             addGroup.addEventListener("click", () => this.addGroup(area));
             header.appendChild(addGroup);
+
+            const clear = el("button", "dtc-btn dtc-btn-danger", "クリア");
+            clear.type = "button";
+            clear.title = "このエリアのタグとグループをすべて捨てる";
+            clear.addEventListener("click", () => this.clearArea(area));
+            header.appendChild(clear);
 
             section.appendChild(header);
             const body = el("div", "dtc-area-body");
@@ -508,6 +514,36 @@ class ComposerPanel {
             index: Infinity,
         });
         this.commit();
+    }
+
+    /**
+     * エリアを空にする。
+     *
+     * セーブしてから作り直す、という使い方の出口。消えるのはワークフローの widget の
+     * 中身だけなので Ctrl+Z で戻せるが、タグを何十個も積んだ後だと押し間違いの損が
+     * 大きいので確認を挟む。
+     */
+    async clearArea(area) {
+        if (!this.requireNode()) return;
+
+        const nodes = this.tree[area];
+        if (!nodes.length) {
+            this.notify(`${AREA_LABELS[area]}はもう空です`);
+            return;
+        }
+
+        const counts = countTags(this.tree);
+        const total = area === "active" ? counts.activeTotal : counts.inactive;
+        const ok = await confirmAction(
+            `${AREA_LABELS[area]}を空にしますか`,
+            `${total} タグをグループごと捨てます。Ctrl+Z で戻せます。`,
+            "delete",
+        );
+        if (!ok) return;
+
+        model.clearArea(this.tree, area);
+        this.commit();
+        this.notify(`${AREA_LABELS[area]}を空にしました`);
     }
 
     requireNode() {

@@ -124,6 +124,17 @@ test("remove detaches the node", () => {
     assert.equal(model.remove(tree, "nope"), false);
 });
 
+test("clearArea empties just that area", () => {
+    const { tree } = sample();
+    model.insert(tree, model.makeTag("keep"), { area: "inactive", parentId: null, index: 0 });
+
+    assert.equal(model.clearArea(tree, "active"), true);
+    assert.deepEqual(tags(tree.active), []);
+    assert.deepEqual(tags(tree.inactive), ["keep"]);
+    // 空にしたエリアをもう一度空にしても何も起きない
+    assert.equal(model.clearArea(tree, "active"), false);
+});
+
 test("tagNamesIn walks nested groups", () => {
     const { tree } = sample();
     assert.deepEqual([...model.tagNamesIn(tree, "active")].sort(), ["b", "c", "d"]);

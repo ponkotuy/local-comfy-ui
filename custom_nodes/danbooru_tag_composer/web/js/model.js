@@ -148,6 +148,15 @@ export function remove(tree, id) {
     return detach(tree, id) !== null;
 }
 
+/** エリアの中身をまるごと捨てる。空にできることが無ければ false。 */
+export function clearArea(tree, area) {
+    const list = tree[area];
+    if (!Array.isArray(list) || !list.length) return false;
+    // 配列を差し替えず中身だけ空にする。描画中のツリーと同じ実体を指したままにしておく
+    list.length = 0;
+    return true;
+}
+
 /** 部分木を id 付きで複製する。プリセットの投入とノードの複製で使う。 */
 export function clone(node) {
     if (node.kind === "group") {
