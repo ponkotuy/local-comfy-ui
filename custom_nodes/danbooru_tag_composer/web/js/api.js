@@ -3,7 +3,7 @@
 // 辞書そのものはブラウザに持ってこない。3 万件を毎回送るとタグが増えるたびに重くなる
 // ので、検索と引き当てはサーバー側の api.py に任せて候補だけ受け取る。
 //
-// 逆にユーザーが登録した対訳の上書きとプリセットは ComfyUI の /userdata に置く。
+// 逆にユーザーが登録した対訳の上書き・プリセット・セーブは ComfyUI の /userdata に置く。
 // マルチユーザー対応・パストラバーサル対策・アトミック書き込みが付いてくるうえ、
 // 保存先の data/user はホストにマウントされているのでコンテナを作り直しても残る。
 
@@ -16,6 +16,9 @@ const PREFIX = "/danbooru-tag-composer";
 export const SOURCE_MACHINE = 3;
 const OVERRIDES_FILE = "danbooru-tag-composer/overrides.json";
 const PRESETS_FILE = "danbooru-tag-composer/presets.json";
+// セーブは 1 件 1 ファイル。1 つの JSON にまとめると、消したいセーブのために
+// 全部を読み書きすることになるし、ファイルをそのまま人に渡すこともできない
+const SAVES_DIR = "danbooru-tag-composer/saves";
 
 async function getJson(path) {
     const response = await api.fetchApi(path);
@@ -88,4 +91,51 @@ export function loadPresets() {
 
 export function savePresets(presets) {
     return saveUserJson(PRESETS_FILE, presets);
+}
+
+// --- セーブ -----------------------------------------------------------------
+
+function savePath(file) {
+    return `${SAVES_DIR}/${file}`;
+}
+
+/**
+ * 保存済みのセーブを新しい順に返す。{file, modified} の配列。
+ *
+ * 中身は開かない。一覧に出すのはファイル名と日時だけなので、セーブが増えても
+ * パネルを開いた瞬間のリクエストは 1 本で済む。
+ */
+export async function listSaves() {
+    try {
+        const files = await api.listUserDataFullInfo(SAVES_DIR);
+        return files
+            .filter((info) => info.path.toLowerCase().endsWith(".json"))
+            .map((info) => ({ file: info.path, modified: info.modified ?? 0 }))
+            .sort((a, b) => b.modified - a.modified);
+    } catch (error) {
+        // セーブが 1 件も無い (= ディレクトリが無い) 場合は 404 を [] にして返して
+        // くれるので、ここに来るのは本当に読めなかったときだけ。編集は続けられる
+        console.warn("[Tag Composer] failed to list saves", error);
+        return [];
+    }
+}
+
+/** セーブファイルの中身。無ければ null。 */
+export function loadSave(file) {
+    return loadUserJson(savePath(file), null);
+}
+
+/** セーブを書き込む。人が開いて読むファイルなので、こちらだけ整形して書く。 */
+export function storeSave(file, data) {
+    return api.storeUserData(savePath(file), JSON.stringify(data, null, 2), {
+        overwrite: true,
+        stringify: false,
+        throwOnError: true,
+    });
+}
+
+export async function deleteSave(file) {
+    const path = savePath(file);
+    const response = await api.deleteUserData(path);
+    if (!response.ok) throw new Error(`${path}: ${response.status}`);
 }

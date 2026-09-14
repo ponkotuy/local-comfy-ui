@@ -89,6 +89,8 @@
 .dtc-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dtc-chip-sub { color: var(--dtc-dim); font-size: 11px; }
 .dtc-chip-preset { border-style: dashed; }
+/* セーブはエリアへ落とすものではないので、掴める見た目にしない */
+.dtc-chip-save { cursor: pointer; }
 
 /* Danbooru のタグカテゴリ。a1111 系の配色に合わせておくと見慣れた色になる */
 .dtc-cat-artist    .dtc-chip-name { color: #e86f6f; }
@@ -111,6 +113,7 @@
 .dtc-area-active { flex: 3 1 0; }
 .dtc-area-inactive { flex: 1 1 0; }
 .dtc-presets { flex: none; }
+.dtc-saves { flex: none; }
 
 .dtc-area-header {
     display: flex;
@@ -259,6 +262,25 @@
     outline-offset: -1px;
     background: color-mix(in srgb, var(--dtc-accent) 18%, transparent);
 }
+
+/* --- セーブ --- */
+
+.dtc-save-bar {
+    display: flex;
+    gap: 4px;
+    flex: none;
+    padding: 2px;
+}
+
+/* 検索欄と同じ見た目を借りる。幅だけはボタンの残りに合わせる */
+.dtc-save-name { flex: 1 1 auto; min-width: 0; }
+
+/* ファイル選択は「取り込み」ボタンから click() で開く。素の input は出さない */
+.dtc-file-picker { display: none; }
+
+/* 枠付きの中に置くチップは、ツリー (.dtc-area-body) と同じだけ内側に寄せる */
+.dtc-presets .dtc-suggest,
+.dtc-saves .dtc-suggest { margin: 2px; }
 
 /* --- プレビュー --- */
 

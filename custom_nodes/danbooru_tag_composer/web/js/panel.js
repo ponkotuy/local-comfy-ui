@@ -7,6 +7,7 @@ import { app } from "/scripts/app.js";
 import * as api from "./api.js";
 import * as model from "./model.js";
 import * as nodeio from "./nodeio.js";
+import * as save from "./save.js";
 import { installDropZone } from "./dnd.js";
 import { renderArea, makeChip } from "./tree.js";
 import { render as renderPrompt } from "./render.js";
@@ -17,6 +18,8 @@ const AREA_LABELS = { active: "適用エリア", inactive: "非適用エリア" 
 const EMPHASIS_WEIGHT = 1.3;
 const SUGGEST_DEBOUNCE_MS = 120;
 const SUGGEST_LIMIT = 24;
+// 編集対象の行に出した一時的な知らせを消すまで
+const NOTICE_MS = 2400;
 
 function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -55,6 +58,39 @@ async function ask(title, value = "") {
     return window.prompt(title, value);
 }
 
+/** 取り返しの付かない操作の確認。ダイアログが無い環境では素の confirm に落とす。 */
+async function confirmAction(title, message, type = "default") {
+    const dialog = app.extensionManager?.dialog;
+    // dialog.confirm は閉じられたときに null を返すので、true だけを承諾とみなす
+    if (dialog?.confirm) return (await dialog.confirm({ title, message, type })) === true;
+    return window.confirm(`${title}\n\n${message}`);
+}
+
+/** テキストをファイルとしてダウンロードさせる。 */
+function download(fileName, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    // 文書に入っていない <a> の click() を無視するブラウザがあるので、一度ぶら下げる
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // click() が実際にダウンロードを始めるまで URL を生かしておく
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/** セーブの一覧に出す日時。年は要らないので月日と時刻だけ。 */
+function formatTimestamp(ms) {
+    if (!ms) return "";
+    return new Date(ms).toLocaleString(undefined, {
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
 export function mountPanel(root) {
     const panel = new ComposerPanel(root);
     return () => panel.destroy();
@@ -70,7 +106,12 @@ class ComposerPanel {
         this.glossary = new Map();
         this.overrides = {};
         this.presets = {};
+        // 保存済みのセーブ {file, modified}。中身は読み込むときに初めて取りに行く
+        this.saves = [];
         this.suggestTimer = null;
+        // 編集対象の行に出している一時的な知らせ。出ていなければ null
+        this.notice = null;
+        this.noticeTimer = null;
         this.suggestSeq = 0;
         // commit 中に来た自分宛ての変更通知を無視するための印
         this.committing = false;
@@ -118,6 +159,7 @@ class ComposerPanel {
         }
 
         panel.appendChild(this.buildPresets());
+        panel.appendChild(this.buildSaves());
         panel.appendChild(this.buildPreview());
 
         this.root.replaceChildren(panel);
@@ -156,6 +198,66 @@ class ComposerPanel {
 
         this.presetBox = el("div", "dtc-suggest");
         box.appendChild(this.presetBox);
+        return box;
+    }
+
+    /**
+     * セーブ。プリセットが「グループ 1 つ」なのに対し、こちらは両エリアまるごと。
+     *
+     * 保存先は 2 つある。名前を付けて残すときは ComfyUI の userdata で、こちらは
+     * 一覧から選んで読み戻せる。書き出し / 取り込みは手元の .json ファイルで、
+     * ワークフローとは別にタグ構成だけを人に渡したり控えを取ったりするのに使う。
+     * どちらも中身は同じ形式 (save.js) なので、書き出したものはそのまま取り込める。
+     */
+    buildSaves() {
+        const box = el("section", "dtc-area dtc-saves");
+        const header = el("header", "dtc-area-header");
+        header.appendChild(el("h3", null, "セーブ"));
+        this.saveHint = el("span", "dtc-area-count");
+        header.appendChild(this.saveHint);
+
+        const exportButton = el("button", "dtc-btn", "書き出し");
+        exportButton.type = "button";
+        exportButton.title = "いまの内容を .json ファイルとしてダウンロードする";
+        exportButton.addEventListener("click", () => this.exportFile());
+        header.appendChild(exportButton);
+
+        const importButton = el("button", "dtc-btn", "取り込み");
+        importButton.type = "button";
+        importButton.title = "セーブファイル (.json) を開いて、いま編集中のノードに読み込む";
+        importButton.addEventListener("click", () => this.filePicker.click());
+        header.appendChild(importButton);
+        box.appendChild(header);
+
+        const bar = el("div", "dtc-save-bar");
+        this.saveNameInput = el("input", "dtc-search-input dtc-save-name");
+        this.saveNameInput.type = "text";
+        this.saveNameInput.placeholder = "セーブ名";
+        this.saveNameInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") this.runSave();
+        });
+        bar.appendChild(this.saveNameInput);
+
+        const saveButton = el("button", "dtc-btn", "保存");
+        saveButton.type = "button";
+        saveButton.title = "この名前で、適用エリアと非適用エリアの中身をまるごと保存する";
+        saveButton.addEventListener("click", () => this.runSave());
+        bar.appendChild(saveButton);
+        box.appendChild(bar);
+
+        this.filePicker = el("input", "dtc-file-picker");
+        this.filePicker.type = "file";
+        this.filePicker.accept = ".json,application/json";
+        this.filePicker.addEventListener("change", () => {
+            const [file] = this.filePicker.files ?? [];
+            // 同じファイルを続けて選んでも change が飛ぶように、毎回空へ戻す
+            this.filePicker.value = "";
+            if (file) this.importFile(file);
+        });
+        box.appendChild(this.filePicker);
+
+        this.saveBox = el("div", "dtc-suggest");
+        box.appendChild(this.saveBox);
         return box;
     }
 
@@ -209,6 +311,9 @@ class ComposerPanel {
     retarget(node) {
         this.node = node ?? null;
         this.closeMenu();
+        // 前の対象に対して出した知らせは、対象が変わった時点で用済み
+        clearTimeout(this.noticeTimer);
+        this.notice = null;
         this.reload();
     }
 
@@ -227,10 +332,13 @@ class ComposerPanel {
 
     /** 見た目だけを作り直す。ワークフローには触らない。 */
     refresh() {
-        this.targetLabel.textContent = this.node
-            ? `編集中: ${this.node.title || "Danbooru Tag Composer"} (#${this.node.id})`
-            : "キャンバスで Danbooru Tag Composer ノードを選んでください";
-        this.targetLabel.classList.toggle("dtc-target-empty", !this.node);
+        this.targetLabel.textContent =
+            this.notice ??
+            (this.node
+                ? `編集中: ${this.node.title || "Danbooru Tag Composer"} (#${this.node.id})`
+                : "キャンバスで Danbooru Tag Composer ノードを選んでください");
+        this.targetLabel.classList.toggle("dtc-target-empty", !this.notice && !this.node);
+        this.targetLabel.classList.toggle("dtc-target-warn", this.notice !== null);
 
         const ctx = this.context();
         for (const area of ["active", "inactive"]) {
@@ -239,7 +347,25 @@ class ComposerPanel {
         this.updateCounts();
         this.updatePreview();
         this.renderPresets();
+        this.renderSaves();
         this.markUsedSuggestions();
+    }
+
+    /**
+     * 編集対象の行に一時的な知らせを出す。
+     *
+     * 保存できた・読めなかった程度の話でダイアログを開くと、続けて操作するときに
+     * 邪魔になる。refresh() を通しても消えないよう notice に持たせてあり、
+     * 時間が経つと元の「編集中: …」へ戻る。
+     */
+    notify(message) {
+        this.notice = message;
+        clearTimeout(this.noticeTimer);
+        this.noticeTimer = setTimeout(() => {
+            this.notice = null;
+            this.refresh();
+        }, NOTICE_MS);
+        this.refresh();
     }
 
     context() {
@@ -386,8 +512,7 @@ class ComposerPanel {
 
     requireNode() {
         if (this.node) return true;
-        this.targetLabel.classList.add("dtc-target-warn");
-        setTimeout(() => this.targetLabel.classList.remove("dtc-target-warn"), 600);
+        this.notify("キャンバスで Danbooru Tag Composer ノードを選んでください");
         return false;
     }
 
@@ -540,9 +665,10 @@ class ComposerPanel {
     // --- プリセット ---------------------------------------------------------
 
     async loadUserData() {
-        [this.overrides, this.presets] = await Promise.all([
+        [this.overrides, this.presets, this.saves] = await Promise.all([
             api.loadOverrides(),
             api.loadPresets(),
+            api.listSaves(),
         ]);
         this.refresh();
     }
@@ -584,8 +710,168 @@ class ComposerPanel {
         }
     }
 
+    // --- セーブ / ロード ----------------------------------------------------
+
+    renderSaves() {
+        this.saveHint.textContent = this.saves.length
+            ? `${this.saves.length} 件`
+            : "名前を付けて丸ごと残せます";
+
+        this.saveBox.replaceChildren();
+        for (const entry of this.saves) {
+            const name = save.fromFileName(entry.file);
+            const chip = el("div", "dtc-chip dtc-chip-save");
+            chip.appendChild(el("span", "dtc-chip-name", name));
+            chip.appendChild(el("span", "dtc-chip-sub", formatTimestamp(entry.modified)));
+            chip.title = "クリックで読み込む (いまの内容は置き換わる) / 右クリックで削除";
+            chip.addEventListener("click", () => this.loadSave(entry.file));
+            chip.addEventListener("contextmenu", (event) => {
+                event.preventDefault();
+                this.deleteSave(entry.file);
+            });
+            this.saveBox.appendChild(chip);
+        }
+    }
+
+    async reloadSaves() {
+        this.saves = await api.listSaves();
+        this.renderSaves();
+    }
+
+    async runSave() {
+        if (!this.requireNode()) return;
+
+        const name = this.saveNameInput.value.trim();
+        const file = save.toFileName(name);
+        if (!file) {
+            this.saveNameInput.focus();
+            this.notify("セーブ名を入れてください");
+            return;
+        }
+
+        if (this.saves.some((entry) => entry.file === file)) {
+            const ok = await confirmAction(
+                "セーブを上書きしますか",
+                `「${save.fromFileName(file)}」はすでにあります。前の内容は消えます。`,
+                "overwrite",
+            );
+            if (!ok) return;
+        }
+
+        try {
+            await api.storeSave(file, save.pack(this.tree, { name, options: this.options }));
+        } catch (error) {
+            console.warn("[Tag Composer] failed to save", error);
+            this.notify(`「${name}」を保存できませんでした`);
+            return;
+        }
+
+        await this.reloadSaves();
+        this.notify(`「${save.fromFileName(file)}」に保存しました`);
+    }
+
+    async loadSave(file) {
+        if (!this.requireNode()) return;
+        const name = save.fromFileName(file);
+        if (!(await this.confirmReplace(name))) return;
+
+        const loaded = save.unpack(await api.loadSave(file));
+        if (!loaded) {
+            this.notify(`「${name}」を読めませんでした`);
+            await this.reloadSaves();
+            return;
+        }
+
+        this.applyLoaded(loaded);
+        this.saveNameInput.value = name;
+        this.notify(`「${name}」を読み込みました`);
+    }
+
+    async deleteSave(file) {
+        const name = save.fromFileName(file);
+        const ok = await confirmAction(
+            "セーブを削除しますか",
+            `「${name}」を消します。元には戻せません。`,
+            "delete",
+        );
+        if (!ok) return;
+
+        try {
+            await api.deleteSave(file);
+        } catch (error) {
+            console.warn("[Tag Composer] failed to delete the save", error);
+            this.notify(`「${name}」を消せませんでした`);
+            return;
+        }
+        await this.reloadSaves();
+    }
+
+    exportFile() {
+        if (!this.requireNode()) return;
+        const name = this.saveNameInput.value.trim() || this.node.title || "tags";
+        const payload = save.pack(this.tree, { name, options: this.options });
+        // 人が開いて中を見るファイルなので整形して書く。タグ数百でも数十 KB に収まる
+        download(save.toFileName(name) ?? `tags${save.EXTENSION}`, JSON.stringify(payload, null, 2));
+    }
+
+    /** 選んだファイルを、いま編集中のノードへ読み込む。セーブ一覧には足さない。 */
+    async importFile(file) {
+        if (!this.requireNode()) return;
+
+        let loaded = null;
+        try {
+            loaded = save.unpack(await file.text());
+        } catch (error) {
+            console.warn("[Tag Composer] failed to read the file", error);
+        }
+        if (!loaded) {
+            this.notify(`${file.name} はセーブファイルとして読めませんでした`);
+            return;
+        }
+
+        const name = loaded.name || save.fromFileName(file.name);
+        if (!(await this.confirmReplace(name))) return;
+
+        this.applyLoaded(loaded);
+        // 続けて「保存」を押せば、そのまま手元のセーブ一覧にも入る
+        this.saveNameInput.value = name;
+        this.notify(`${file.name} を読み込みました`);
+    }
+
+    /** いまの内容を捨ててよいか訊く。空なら訊かない。 */
+    confirmReplace(name) {
+        if (!this.tree.active.length && !this.tree.inactive.length) return Promise.resolve(true);
+        return confirmAction(
+            "読み込みますか",
+            `いまの適用エリアと非適用エリアの中身をすべて捨てて、「${name}」の内容に置き換えます。`,
+        );
+    }
+
+    /**
+     * 読み込んだセーブをノードへ流し込む。
+     *
+     * ツリーと設定を 1 回の committing で書くので、自分の書き込みで飛んでくる
+     * 変更通知を reload() として拾い直すことがない。ワークフローの widget を
+     * 書き換えるだけなので、間違えて読み込んでも ctrl+Z で戻せる。
+     */
+    applyLoaded(loaded) {
+        this.tree = model.ensureIds(loaded.tree);
+        this.committing = true;
+        try {
+            // options を持たないセーブでは、いまのノードの設定に手を付けない
+            if (loaded.options) nodeio.writeOptions(this.node, loaded.options);
+            nodeio.writeTree(this.node, this.tree);
+        } finally {
+            this.committing = false;
+        }
+        this.options = nodeio.readOptions(this.node);
+        this.refresh();
+        this.fetchTranslations();
+    }
+
     destroy() {
         clearTimeout(this.suggestTimer);
+        clearTimeout(this.noticeTimer);
         this.closeMenu();
         document.removeEventListener("pointerdown", this.onDocumentPointerDown);
         app.api?.removeEventListener("graphChanged", this.onGraphChanged);

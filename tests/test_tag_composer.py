@@ -67,6 +67,9 @@ class JavaScriptTest(unittest.TestCase):
     def test_drag_and_drop_contract(self):
         self.run_js("dnd.test.mjs")
 
+    def test_save_file_format(self):
+        self.run_js("save.test.mjs")
+
 
 class RenderInputTest(unittest.TestCase):
     def test_accepts_json_string(self):

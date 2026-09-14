@@ -51,6 +51,32 @@ export function readOptions(node) {
     };
 }
 
+/**
+ * 設定をノードへ書き戻す。セーブを読み込んだときに、出力文字列まで同じに戻すため。
+ *
+ * undefined のキーは触らない。options を持たない古いセーブを読んだときに、いまの
+ * ノードの設定を既定値で上書きしてしまわないようにする。
+ */
+export function writeOptions(node, options) {
+    let changed = false;
+    changed = writeWidget(node, "separator", options?.separator) || changed;
+    changed = writeWidget(node, "underscore_to_space", options?.underscoreToSpace) || changed;
+    if (changed) {
+        app.graph?.setDirtyCanvas(true, true);
+        emit(node);
+    }
+    return changed;
+}
+
+function writeWidget(node, name, value) {
+    if (value === undefined) return false;
+    const w = widget(node, name);
+    if (!w || w.value === value) return false;
+    w.value = value;
+    w.callback?.(value);
+    return true;
+}
+
 // --- 変更の通知 -------------------------------------------------------------
 // サイドバーで編集した結果をノード上のサマリ表示へ反映するための、拡張内だけの配線。
 
